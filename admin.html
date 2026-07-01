@@ -278,6 +278,9 @@
         <p id="chatSubtitle">Reply to a user anonymously from the active thread.</p>
       </div>
       <div class="notification-banner" id="notificationBanner">Browser notifications are enabled. If you don't see a prompt, allow notifications in your browser settings.</div>
+      <div style="text-align:center; padding: 12px 16px;">
+        <button id="notifyButton" type="button" style="padding: 10px 16px; border-radius: 999px; border: 1px solid #128c7e; background: white; color: #128c7e; cursor: pointer; font-weight: 700;">Enable notifications</button>
+      </div>
       <div class="chat-window">
         <div class="chat-messages" id="chatMessages"></div>
         <div class="message-input-bar">
@@ -323,6 +326,7 @@
     let activeThread = null;
 
     const notificationBanner = document.getElementById('notificationBanner');
+    const notifyButton = document.getElementById('notifyButton');
 
     function updateNotificationBanner() {
       if (!notificationBanner) return;
@@ -345,6 +349,18 @@
       } else {
         updateNotificationBanner();
       }
+    }
+
+    function enableNotifications() {
+      if (!('Notification' in window)) return;
+      Notification.requestPermission().then((permission) => {
+        updateNotificationBanner();
+        if (permission !== 'granted') {
+          alert('Please allow browser notifications in your browser settings.');
+        }
+      }).catch(() => {
+        alert('Unable to request notification permission.');
+      });
     }
 
     function formatTime(date) {
@@ -497,6 +513,10 @@
     window.addEventListener('DOMContentLoaded', () => {
       loadThreads();
       requestNotificationPermission();
+      updateNotificationBanner();
+      if (notifyButton) {
+        notifyButton.addEventListener('click', enableNotifications);
+      }
     });
   </script>
 </body>
