@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anonymous Admin Dashboard</title>
+  <style>
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface-strong: #e9edef;
+      --border: #d7dde4;
+      --primary: #075e54;
+      --primary-soft: #128c7e;
+      --text: #263238;
+      --muted: #607d8b;
+      --shadow: 0 18px 40px rgba(34, 49, 63, 0.08);
+      --radius: 24px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background: linear-gradient(180deg, #e7f5f1 0%, #f0f2f5 100%);
+      color: var(--text);
+      padding: 20px;
+    }
+
+    .dashboard {
+      display: grid;
+      grid-template-columns: 320px minmax(0, 1fr);
+      gap: 20px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .sidebar,
+    .chat-panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header,
+    .chat-header {
+      padding: 20px 24px;
+      border-bottom: 1px solid var(--border);
+      background: #f9fbfc;
+    }
+
+    .sidebar-header h2,
+    .chat-header h2 {
+      font-size: 1.1rem;
+      letter-spacing: 0.01em;
+    }
+
+    .sidebar-header p,
+    .chat-header p {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 0.92rem;
+    }
+
+    .thread-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .thread-item {
+      display: grid;
+      gap: 6px;
+      padding: 16px;
+      border-radius: 18px;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: background 0.18s ease, border-color 0.18s ease;
+    }
+
+    .thread-item.active,
+    .thread-item:hover {
+      background: #f0fbf8;
+      border-color: rgba(18, 140, 126, 0.25);
+    }
+
+    .thread-item h3 {
+      font-size: 0.98rem;
+      font-weight: 700;
+    }
+
+    .thread-item small {
+      color: var(--muted);
+      font-size: 0.82rem;
+    }
+
+    .thread-item p {
+      color: #32424b;
+      font-size: 0.9rem;
+      line-height: 1.4;
+      max-height: 3.2em;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .chat-window {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 22px 24px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.95) 0%, rgba(244,249,247,0.95) 100%);
+      display: grid;
+      gap: 12px;
+    }
+
+    .chat-message {
+      max-width: 78%;
+      padding: 14px 16px;
+      border-radius: 18px;
+      line-height: 1.5;
+      position: relative;
+      word-break: break-word;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+    }
+
+    .chat-message.admin {
+      margin-left: auto;
+      background: #dcf8c6;
+      border-top-right-radius: 4px;
+    }
+
+    .chat-message.user {
+      background: #ffffff;
+      border-top-left-radius: 4px;
+    }
+
+    .chat-message time {
+      display: block;
+      margin-top: 8px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      opacity: 0.88;
+    }
+
+    .message-input-bar {
+      padding: 18px 20px;
+      border-top: 1px solid var(--border);
+      display: grid;
+      gap: 12px;
+      background: var(--surface-strong);
+    }
+
+    .message-input-bar textarea {
+      width: 100%;
+      min-height: 72px;
+      padding: 14px 16px;
+      border-radius: 16px;
+      border: 1px solid rgba(96, 125, 139, 0.16);
+      resize: vertical;
+      font-size: 0.98rem;
+      line-height: 1.5;
+      outline: none;
+    }
+
+    .message-input-bar textarea:focus {
+      border-color: rgba(18, 140, 126, 0.4);
+      box-shadow: 0 0 0 4px rgba(18, 140, 126, 0.08);
+    }
+
+    .message-input-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+
+    .message-input-actions button {
+      padding: 12px 18px;
+      border-radius: 999px;
+      border: none;
+      background: var(--primary);
+      color: white;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform 0.16s ease, box-shadow 0.16s ease;
+    }
+
+    .message-input-actions button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 18px rgba(7, 94, 84, 0.16);
+    }
+
+    .message-input-actions button:disabled {
+      background: rgba(7, 94, 84, 0.4);
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    @media (max-width: 980px) {
+      .dashboard {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        max-height: 420px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 12px;
+      }
+
+      .sidebar-header,
+      .chat-header,
+      .message-input-bar,
+      .thread-item,
+      .chat-messages {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+
+      .sidebar-header,
+      .chat-header {
+        padding-top: 16px;
+        padding-bottom: 16px;
+      }
+
+      .thread-list {
+        padding: 10px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="dashboard">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Active Threads</h2>
+        <p>Anonymous conversations ready for reply.</p>
+      </div>
+      <div class="thread-list" id="threadList"></div>
+    </aside>
+
+    <section class="chat-panel">
+      <div class="chat-header">
+        <h2 id="chatTitle">Select a thread</h2>
+        <p id="chatSubtitle">Reply to a user anonymously from the active thread.</p>
+      </div>
+      <div class="chat-window">
+        <div class="chat-messages" id="chatMessages"></div>
+        <div class="message-input-bar">
+          <textarea id="replyInput" placeholder="Type your reply here..."></textarea>
+          <div class="message-input-actions">
+            <button id="replyButton" disabled>Send Reply</button>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script>
+    const SERVER_URL = 'http://localhost:3000';
+    const socket = io(SERVER_URL);
+    let threads = [];
+
+    const threadListEl = document.getElementById('threadList');
+    const chatTitleEl = document.getElementById('chatTitle');
+    const chatSubtitleEl = document.getElementById('chatSubtitle');
+    const chatMessagesEl = document.getElementById('chatMessages');
+    const replyInputEl = document.getElementById('replyInput');
+    const replyButtonEl = document.getElementById('replyButton');
+
+    function loadThreads() {
+      fetch(`${SERVER_URL}/threads`)
+        .then((response) => response.json())
+        .then((loadedThreads) => {
+          threads = loadedThreads || [];
+          renderThreads();
+        })
+        .catch((error) => {
+          console.error('Failed to load threads from server:', error);
+          renderThreads();
+        });
+    }
+
+    let activeThread = null;
+
+    function formatTime(date) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function renderThreads() {
+      threadListEl.innerHTML = '';
+      threads.forEach((thread) => {
+        const item = document.createElement('button');
+        item.type = 'button';
+        item.className = 'thread-item';
+        item.dataset.threadId = thread.id;
+        item.innerHTML = `
+          <h3>${thread.label}</h3>
+          <small>${thread.id}</small>
+          <p>${thread.preview}</p>
+        `;
+
+        item.addEventListener('click', () => selectThread(thread.id));
+        threadListEl.appendChild(item);
+      });
+
+      if (!activeThread && threads.length > 0) {
+        selectThread(threads[0].id);
+      }
+    }
+
+    function selectThread(threadId) {
+      activeThread = threads.find((thread) => thread.id === threadId);
+      const buttons = threadListEl.querySelectorAll('.thread-item');
+      buttons.forEach((button) => {
+        button.classList.toggle('active', button.dataset.threadId === threadId);
+      });
+
+      chatTitleEl.textContent = activeThread.label;
+      chatSubtitleEl.textContent = `Thread ID: ${activeThread.id}`;
+      replyInputEl.value = '';
+      replyButtonEl.disabled = true;
+      renderMessages();
+      socket.emit('join_room', activeThread.id);
+    }
+
+    function renderMessages() {
+      chatMessagesEl.innerHTML = '';
+      if (!activeThread) return;
+
+      activeThread.messages.forEach((message) => {
+        const messageEl = document.createElement('div');
+        messageEl.className = `chat-message ${message.sender}`;
+        messageEl.innerHTML = `
+          <div>${message.text}</div>
+          <time>${message.time}</time>
+        `;
+        chatMessagesEl.appendChild(messageEl);
+      });
+
+      chatMessagesEl.scrollTop = chatMessagesEl.scrollHeight;
+    }
+
+    function sendReply() {
+      const text = replyInputEl.value.trim();
+      if (!text || !activeThread) return;
+
+      socket.emit('send_message', {
+        threadId: activeThread.id,
+        text,
+        sender: 'admin',
+      });
+      replyInputEl.value = '';
+      replyButtonEl.disabled = true;
+    }
+
+    socket.on('connect', () => {
+      if (activeThread) {
+        socket.emit('join_room', activeThread.id);
+      }
+    });
+
+    socket.on('receive_message', (message) => {
+      if (!message || !message.threadId) return;
+
+      let thread = threads.find((item) => item.id === message.threadId);
+      if (!thread) {
+        thread = {
+          id: message.threadId,
+          label: `Anonymous ${message.threadId.slice(-4)}`,
+          preview: message.text,
+          messages: [],
+        };
+        threads.unshift(thread);
+      }
+
+      thread.preview = message.text;
+      thread.messages.push({
+        sender: message.sender === 'admin' ? 'admin' : 'user',
+        text: message.text,
+        time: formatTime(new Date(message.timestamp)),
+      });
+
+      if (activeThread && activeThread.id === message.threadId) {
+        renderMessages();
+      }
+      renderThreads();
+    });
+
+    // Handle when a new anonymous thread is created (user connected without sending a message yet)
+    socket.on('thread_joined', (payload) => {
+      if (!payload || !payload.threadId) return;
+      const threadId = payload.threadId;
+      let thread = threads.find((t) => t.id === threadId);
+      if (!thread) {
+        thread = {
+          id: threadId,
+          label: payload.label || `Anonymous ${threadId.slice(-4)}`,
+          preview: payload.preview || '',
+          messages: [],
+        };
+        threads.unshift(thread);
+      } else {
+        thread.label = payload.label || thread.label;
+        thread.preview = payload.preview || thread.preview;
+      }
+
+      renderThreads();
+    });
+
+    replyInputEl.addEventListener('input', () => {
+      replyButtonEl.disabled = !replyInputEl.value.trim();
+    });
+
+    replyButtonEl.addEventListener('click', sendReply);
+
+    window.addEventListener('DOMContentLoaded', () => {
+      loadThreads();
+    });
+  </script>
+</body>
+</html>

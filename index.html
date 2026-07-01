@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chat with Me</title>
+  <style>
+    :root {
+      --bg: #e5ddd5;
+      --panel: #f2f3f5;
+      --primary: #075e54;
+      --secondary: #128c7e;
+      --text: #0f3d32;
+      --muted: #667781;
+      --bubble-sent: #dcf8c6;
+      --bubble-recv: #ffffff;
+      --border: rgba(0, 0, 0, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    body {
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #ffffff 0%, #d8f0ea 35%, #e5ddd5 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .chat-shell {
+      width: min(100%, 480px);
+      max-height: 100vh;
+      background: var(--panel);
+      border-radius: 24px;
+      box-shadow: 0 20px 60px rgba(15, 61, 50, 0.12);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    header {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      color: white;
+      padding: 20px 20px 18px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .header-text {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .header-text h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .header-text p {
+      font-size: 0.9rem;
+      opacity: 0.87;
+      color: rgba(255, 255, 255, 0.95);
+    }
+
+    .avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.22);
+      display: grid;
+      place-items: center;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: white;
+    }
+
+    .thread-id {
+      font-size: 0.8rem;
+      color: rgba(255, 255, 255, 0.8);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 220px;
+    }
+
+    .messages {
+      padding: 20px 16px;
+      flex: 1;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: var(--bg);
+    }
+
+    .message {
+      max-width: 80%;
+      padding: 12px 14px;
+      border-radius: 18px;
+      line-height: 1.5;
+      word-break: break-word;
+      box-shadow: 0 1px 1px rgba(0, 0, 0, 0.06);
+    }
+
+    .message.received {
+      align-self: flex-start;
+      background: var(--bubble-recv);
+      color: var(--text);
+      border-top-left-radius: 4px;
+    }
+
+    .message.sent {
+      align-self: flex-end;
+      background: var(--bubble-sent);
+      color: var(--text);
+      border-top-right-radius: 4px;
+    }
+
+    .message small {
+      display: block;
+      margin-top: 6px;
+      font-size: 0.75rem;
+      color: var(--muted);
+      opacity: 0.85;
+    }
+
+    .input-panel {
+      padding: 14px 16px 18px;
+      background: white;
+      border-top: 1px solid rgba(0, 0, 0, 0.06);
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .input-panel input {
+      flex: 1;
+      padding: 14px 16px;
+      border-radius: 999px;
+      border: 1px solid rgba(0, 0, 0, 0.1);
+      font-size: 0.98rem;
+      outline: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .input-panel input:focus {
+      border-color: rgba(18, 140, 126, 0.45);
+      box-shadow: 0 0 0 4px rgba(18, 140, 126, 0.08);
+    }
+
+    .input-panel button {
+      border: none;
+      background: var(--secondary);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-weight: 700;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+      min-width: 88px;
+    }
+
+    .input-panel button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 18px rgba(18, 140, 126, 0.18);
+    }
+
+    .input-panel button:disabled {
+      background: rgba(18, 140, 126, 0.45);
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+    }
+
+    .footer {
+      text-align: center;
+      font-size: 0.78rem;
+      color: var(--muted);
+      padding: 10px 14px 12px;
+    }
+
+    @media (max-width: 420px) {
+      header {
+        padding: 18px 16px 14px;
+      }
+
+      .chat-shell {
+        border-radius: 20px;
+      }
+
+      .messages {
+        padding: 16px 14px;
+      }
+
+      .input-panel {
+        padding: 12px 14px 14px;
+      }
+
+      .input-panel input {
+        padding: 12px 14px;
+      }
+
+      .input-panel button {
+        min-width: 72px;
+        padding: 12px 14px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="chat-shell">
+    <header>
+      <div class="header-text">
+        <h1>Chat with Me</h1>
+        <p>Your private anonymous thread</p>
+        <div class="thread-id" id="threadIdLabel"></div>
+      </div>
+      <div class="avatar">A</div>
+    </header>
+
+    <section class="messages" id="messages"></section>
+
+    <form class="input-panel" id="chatForm">
+      <input
+        type="text"
+        id="messageInput"
+        placeholder="Type a message..."
+        autocomplete="off"
+        aria-label="Message"
+      />
+      <button type="submit" id="sendButton">Send</button>
+    </form>
+
+    <div class="footer">This chat remembers your unique thread ID locally.</div>
+  </main>
+
+  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script>
+    const messagesEl = document.getElementById('messages');
+    const inputEl = document.getElementById('messageInput');
+    const formEl = document.getElementById('chatForm');
+    const threadIdLabel = document.getElementById('threadIdLabel');
+    const sendButton = document.getElementById('sendButton');
+
+    const THREAD_STORAGE_KEY = 'anonChatThreadId';
+    const SERVER_URL = 'http://localhost:3000';
+    const socket = io(SERVER_URL);
+
+    function createThreadId() {
+      return 'thread-' + Math.random().toString(36).slice(2, 10) + '-' + Date.now().toString(36);
+    }
+
+    function getThreadId() {
+      let id = localStorage.getItem(THREAD_STORAGE_KEY);
+      if (!id) {
+        id = createThreadId();
+        localStorage.setItem(THREAD_STORAGE_KEY, id);
+      }
+      return id;
+    }
+
+    const threadId = getThreadId();
+    threadIdLabel.textContent = `Thread ID: ${threadId}`;
+
+    socket.on('connect', () => {
+      appendMessage('Connected to chat server.', 'system');
+      socket.emit('join_room', threadId);
+    });
+
+    socket.on('joined_room', (payload) => {
+      if (payload && payload.threadId === threadId) {
+        appendMessage('Joined anonymous thread.', 'system');
+      }
+    });
+
+    socket.on('receive_message', (message) => {
+      if (!message || message.threadId !== threadId) return;
+      if (message.sender === 'user') {
+        appendMessage(message.text, 'sent');
+      } else {
+        appendMessage(message.text, 'received');
+      }
+    });
+
+    socket.on('disconnect', () => {
+      appendMessage('Disconnected from server.', 'system');
+    });
+
+    socket.on('connect_error', () => {
+      appendMessage('Unable to connect to socket server.', 'system');
+    });
+
+    function appendMessage(text, type = 'received') {
+      const bubble = document.createElement('div');
+      bubble.className = `message ${type}`;
+      bubble.innerHTML = `<span>${text}</span><small>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>`;
+      messagesEl.appendChild(bubble);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    function sendMessage(text) {
+      if (!text.trim()) return;
+      socket.emit('send_message', {
+        threadId,
+        text: text.trim(),
+        sender: 'user',
+      });
+      inputEl.value = '';
+      inputEl.focus();
+    }
+
+    formEl.addEventListener('submit', (event) => {
+      event.preventDefault();
+      sendMessage(inputEl.value);
+    });
+
+    inputEl.addEventListener('input', () => {
+      sendButton.disabled = !inputEl.value.trim();
+    });
+
+    window.addEventListener('DOMContentLoaded', () => {
+      appendMessage('Welcome! Start typing to chat anonymously.');
+      sendButton.disabled = true;
+    });
+  </script>
+</body>
+</html>
