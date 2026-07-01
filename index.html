@@ -293,6 +293,9 @@
         appendMessage(message.text, 'sent');
       } else {
         appendMessage(message.text, 'received');
+        if (document.hidden) {
+          showNotification('Admin replied', message.text);
+        }
       }
     });
 
@@ -303,6 +306,25 @@
     socket.on('connect_error', () => {
       appendMessage('Unable to connect to socket server.', 'system');
     });
+
+    function requestNotificationPermission() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().catch(() => {});
+      }
+    }
+
+    function showNotification(title, message) {
+      if (!('Notification' in window) || Notification.permission !== 'granted') return;
+      try {
+        new Notification(title, {
+          body: message,
+          icon: '/favicon.ico',
+        });
+      } catch (error) {
+        console.warn('Notification failed', error);
+      }
+    }
 
     function appendMessage(text, type = 'received') {
       const bubble = document.createElement('div');
@@ -335,6 +357,7 @@
     window.addEventListener('DOMContentLoaded', () => {
       appendMessage('Welcome! Start typing to chat anonymously.');
       sendButton.disabled = true;
+      requestNotificationPermission();
     });
   </script>
 </body>
