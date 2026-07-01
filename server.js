@@ -55,12 +55,12 @@ const io = new Server(server, {
   },
 });
 
-const ADMIN_ROUTE = '/admin-secret-access-xyz';
-const ADMIN_KEY = 'mySecretPassword';
+const ADMIN_ROUTE = process.env.ADMIN_ROUTE || '/admin-secret-access-xyz';
+const ADMIN_KEY = process.env.ADMIN_KEY || 'mySecretPassword';
 
 function validateAdminKey(req, res, next) {
   const { key } = req.query;
-  if (key !== ADMIN_KEY) {
+  if (!key || key !== ADMIN_KEY) {
     return res.status(403).send('Forbidden');
   }
   next();
