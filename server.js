@@ -55,8 +55,17 @@ const io = new Server(server, {
   },
 });
 
+// Serve static files (landing page, index.html, admin.html, client assets)
+app.use(express.static(path.join(__dirname)));
+
 app.get('/', (req, res) => {
-  res.send('Anonymous chat server is running.');
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get(['/landing', '/hub'], (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.sendFile(path.join(__dirname, 'landing.html'));
 });
 
 app.get('/threads', (req, res) => {

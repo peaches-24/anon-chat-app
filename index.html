@@ -243,18 +243,21 @@
     </form>
 
     <div class="footer">This chat remembers your unique thread ID locally.</div>
+    <div style="padding: 12px 16px; text-align: center; font-size: 0.9rem; background: #f8f9fa; border-top: 1px solid rgba(0,0,0,.05);">
+      Want to reply as admin? <a href="/admin.html" style="color: #128c7e; font-weight: 700; text-decoration: none;">Open admin dashboard</a>.
+    </div>
   </main>
 
-  <script src="http://localhost:3000/socket.io/socket.io.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
   <script>
     const messagesEl = document.getElementById('messages');
+    const SERVER_URL = window.location.origin;
     const inputEl = document.getElementById('messageInput');
     const formEl = document.getElementById('chatForm');
     const threadIdLabel = document.getElementById('threadIdLabel');
     const sendButton = document.getElementById('sendButton');
 
     const THREAD_STORAGE_KEY = 'anonChatThreadId';
-    const SERVER_URL = 'http://localhost:3000';
     const socket = io(SERVER_URL);
 
     function createThreadId() {
