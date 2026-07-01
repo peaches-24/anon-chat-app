@@ -214,6 +214,18 @@
       box-shadow: none;
     }
 
+    .notification-banner {
+      margin: 0 20px 18px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #e6ffef;
+      color: #075e54;
+      font-size: 0.95rem;
+      text-align: center;
+      border: 1px solid rgba(18, 140, 126, 0.18);
+      display: none;
+    }
+
     @media (max-width: 980px) {
       .dashboard {
         grid-template-columns: 1fr;
@@ -265,6 +277,7 @@
         <h2 id="chatTitle">Select a thread</h2>
         <p id="chatSubtitle">Reply to a user anonymously from the active thread.</p>
       </div>
+      <div class="notification-banner" id="notificationBanner">Browser notifications are enabled.</div>
       <div class="chat-window">
         <div class="chat-messages" id="chatMessages"></div>
         <div class="message-input-bar">
@@ -309,6 +322,31 @@
 
     let activeThread = null;
 
+    const notificationBanner = document.getElementById('notificationBanner');
+
+    function updateNotificationBanner() {
+      if (!notificationBanner) return;
+      if (!('Notification' in window)) {
+        notificationBanner.style.display = 'none';
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        notificationBanner.textContent = 'Browser notifications are enabled.';
+        notificationBanner.style.display = 'block';
+      } else {
+        notificationBanner.style.display = 'none';
+      }
+    }
+
+    function requestNotificationPermission() {
+      if (!('Notification' in window)) return;
+      if (Notification.permission === 'default') {
+        Notification.requestPermission().then(updateNotificationBanner).catch(() => {});
+      } else {
+        updateNotificationBanner();
+      }
+    }
+
     function formatTime(date) {
       return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
@@ -348,13 +386,6 @@
       replyButtonEl.disabled = true;
       renderMessages();
       socket.emit('join_room', activeThread.id);
-    }
-
-    function requestNotificationPermission() {
-      if (!('Notification' in window)) return;
-      if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => {});
-      }
     }
 
     function showNotification(title, message) {

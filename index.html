@@ -190,6 +190,18 @@
       padding: 10px 14px 12px;
     }
 
+    .notification-banner {
+      margin: 0 16px 16px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      background: #e6ffef;
+      color: #075e54;
+      font-size: 0.9rem;
+      text-align: center;
+      border: 1px solid rgba(18, 140, 126, 0.18);
+      display: none;
+    }
+
     @media (max-width: 420px) {
       header {
         padding: 18px 16px 14px;
@@ -242,6 +254,7 @@
       <button type="submit" id="sendButton">Send</button>
     </form>
 
+    <div class="notification-banner" id="notificationBanner">Browser notifications are enabled.</div>
     <div class="footer">This chat remembers your unique thread ID locally.</div>
     <div style="padding: 12px 16px; text-align: center; font-size: 0.9rem; background: #f8f9fa; border-top: 1px solid rgba(0,0,0,.05);">
       Want to reply as admin? <a href="/admin.html" style="color: #128c7e; font-weight: 700; text-decoration: none;">Open admin dashboard</a>.
@@ -258,6 +271,7 @@
     const sendButton = document.getElementById('sendButton');
 
     const THREAD_STORAGE_KEY = 'anonChatThreadId';
+    const notificationBanner = document.getElementById('notificationBanner');
     const socket = io(SERVER_URL);
 
     function createThreadId() {
@@ -307,10 +321,26 @@
       appendMessage('Unable to connect to socket server.', 'system');
     });
 
+    function updateNotificationBanner() {
+      if (!notificationBanner) return;
+      if (!('Notification' in window)) {
+        notificationBanner.style.display = 'none';
+        return;
+      }
+      if (Notification.permission === 'granted') {
+        notificationBanner.textContent = 'Browser notifications are enabled.';
+        notificationBanner.style.display = 'block';
+      } else {
+        notificationBanner.style.display = 'none';
+      }
+    }
+
     function requestNotificationPermission() {
       if (!('Notification' in window)) return;
       if (Notification.permission === 'default') {
-        Notification.requestPermission().catch(() => {});
+        Notification.requestPermission().then(updateNotificationBanner).catch(() => {});
+      } else {
+        updateNotificationBanner();
       }
     }
 
@@ -358,6 +388,7 @@
       appendMessage('Welcome! Start typing to chat anonymously.');
       sendButton.disabled = true;
       requestNotificationPermission();
+      updateNotificationBanner();
     });
   </script>
 </body>
