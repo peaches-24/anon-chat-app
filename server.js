@@ -55,12 +55,35 @@ const io = new Server(server, {
   },
 });
 
-// Serve static files (landing page, index.html, admin.html, client assets)
+const ADMIN_ROUTE = '/admin-secret-access-xyz';
+const ADMIN_KEY = 'mySecretPassword';
+
+function validateAdminKey(req, res, next) {
+  const { key } = req.query;
+  if (key !== ADMIN_KEY) {
+    return res.status(403).send('Forbidden');
+  }
+  next();
+}
+
+app.use((req, res, next) => {
+  if (req.path === '/admin.html' || req.path === '/admin') {
+    return res.status(404).send('Not found');
+  }
+  next();
+});
+
+// Serve static files (landing page, index.html, client assets)
 app.use(express.static(path.join(__dirname)));
 
 app.get('/', (req, res) => {
   res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get(ADMIN_ROUTE, validateAdminKey, (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.sendFile(path.join(__dirname, 'admin.html'));
 });
 
 app.get(['/landing', '/hub'], (req, res) => {
