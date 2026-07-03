@@ -1,52 +1,109 @@
 const express = require('express');
 const http = require('http');
-const fs = require('fs');
 const path = require('path');
 const { Server } = require('socket.io');
+const { MongoClient } = require('mongodb');
+require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
-const DATA_FILE = path.join(__dirname, 'threads.json');
-let threads = [];
 
-function loadThreads() {
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const DB_NAME = process.env.DB_NAME || 'anon-chat-app';
+const client = new MongoClient(MONGODB_URI);
+let messagesCollection;
+
+async function connectDb() {
   try {
-    if (fs.existsSync(DATA_FILE)) {
-      const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      threads = JSON.parse(raw) || [];
-    }
+    await client.connect();
+    const db = client.db(DB_NAME);
+    messagesCollection = db.collection('messages');
+    await messagesCollection.createIndex({ threadId: 1, timestamp: 1 });
+    console.log('MongoDB connected');
   } catch (error) {
-    console.error('Failed to load threads:', error);
-    threads = [];
+    console.error('MongoDB connection failed:', error);
+    process.exit(1);
   }
 }
 
-function saveThreads() {
-  try {
-    fs.writeFileSync(DATA_FILE, JSON.stringify(threads, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Failed to save threads:', error);
-  }
+function getThreadLabel(threadId) {
+  return `Anonymous ${threadId.slice(-4)}`;
 }
 
-function findThread(threadId) {
-  return threads.find((thread) => thread.id === threadId);
+function formatThread(threadId, preview, lastTimestamp) {
+  return {
+    id: threadId,
+    label: getThreadLabel(threadId),
+    preview: preview || '',
+    lastTimestamp,
+  };
 }
 
 function ensureThread(threadId) {
-  let thread = findThread(threadId);
-  if (!thread) {
-    thread = {
-      id: threadId,
-      label: `Anonymous ${threadId.slice(-4)}`,
-      preview: '',
-      messages: [],
-    };
-    threads.unshift(thread);
-    saveThreads();
-  }
-  return thread;
+  return {
+    id: threadId,
+    label: getThreadLabel(threadId),
+    preview: '',
+  };
 }
+
+async function loadThreadSummaries() {
+  const pipeline = [
+    { $sort: { timestamp: -1 } },
+    {
+      $group: {
+        _id: '$threadId',
+        preview: { $first: '$text' },
+        timestamp: { $first: '$timestamp' },
+      },
+    },
+    {
+      $project: {
+        _id: 0,
+        threadId: '$_id',
+        preview: 1,
+        timestamp: 1,
+      },
+    },
+    { $sort: { timestamp: -1 } },
+  ];
+  return messagesCollection.aggregate(pipeline).toArray();
+}
+
+async function getMessagesForThread(threadId) {
+  return messagesCollection
+    .find({ threadId })
+    .sort({ timestamp: 1 })
+    .project({ _id: 0, threadId: 1, sender: 1, text: 1, timestamp: 1 })
+    .toArray();
+}
+
+async function saveMessage(message) {
+  await messagesCollection.insertOne(message);
+
+  // Send web-push notifications to subscribed clients
+  if (pushSubscriptions.length > 0 && VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+    const payload = JSON.stringify({
+      title: 'New message',
+      body: message.text,
+      threadId: message.threadId,
+      timestamp: message.timestamp,
+    });
+
+    pushSubscriptions.forEach((sub) => {
+      webpush.sendNotification(sub, payload).catch((err) => {
+        if (err.statusCode === 410 || err.statusCode === 404) {
+          // subscription is gone, remove it
+          pushSubscriptions = pushSubscriptions.filter((s) => JSON.stringify(s) !== JSON.stringify(sub));
+        } else {
+          console.error('Web Push error:', err);
+        }
+      });
+    });
+  }
+}
+
+const webpush = require('web-push');
 
 const io = new Server(server, {
   cors: {
@@ -54,6 +111,18 @@ const io = new Server(server, {
     methods: ['GET', 'POST'],
   },
 });
+
+const VAPID_SUBJECT = process.env.VAPID_SUBJECT || 'mailto:admin@example.com';
+const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || '';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '';
+
+if (VAPID_PUBLIC_KEY && VAPID_PRIVATE_KEY) {
+  webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+} else {
+  console.warn('VAPID keys are not set. Web Push will be disabled until keys are provided.');
+}
+
+let pushSubscriptions = []; // in-memory; optional persistence can be added
 
 const ADMIN_ROUTE = process.env.ADMIN_ROUTE || '/admin-secret-access-xyz';
 const ADMIN_KEY = process.env.ADMIN_KEY || 'mySecretPassword';
@@ -91,11 +160,46 @@ app.get(['/landing', '/hub'], (req, res) => {
   res.sendFile(path.join(__dirname, 'landing.html'));
 });
 
-app.get('/threads', (req, res) => {
-  res.json(threads);
+app.get('/threads', async (req, res) => {
+  try {
+    const threads = await loadThreadSummaries();
+    res.json(threads);
+  } catch (error) {
+    console.error('Failed to load threads:', error);
+    res.status(500).json({ error: 'Failed to load threads' });
+  }
 });
 
-loadThreads();
+app.get('/threads/:threadId/messages', async (req, res) => {
+  try {
+    const messages = await getMessagesForThread(req.params.threadId);
+    res.json(messages);
+  } catch (error) {
+    console.error('Failed to load messages for thread', req.params.threadId, error);
+    res.status(500).json({ error: 'Failed to load thread messages' });
+  }
+});
+
+// Web Push subscription endpoints
+app.use(express.json());
+
+app.post('/subscribe', (req, res) => {
+  const subscription = req.body;
+  if (!subscription || !subscription.endpoint) {
+    if (VAPID_PUBLIC_KEY) {
+      return res.json({ publicKey: VAPID_PUBLIC_KEY });
+    }
+    return res.status(400).json({ error: 'Invalid subscription' });
+  }
+  pushSubscriptions.push(subscription);
+  res.status(201).json({ success: true });
+});
+
+app.post('/unsubscribe', (req, res) => {
+  const subscription = req.body;
+  pushSubscriptions = pushSubscriptions.filter((s) => JSON.stringify(s) !== JSON.stringify(subscription));
+  res.json({ success: true });
+});
 
 io.on('connection', (socket) => {
   console.log(`Socket connected: ${socket.id}`);
@@ -106,23 +210,21 @@ io.on('connection', (socket) => {
     }
 
     socket.join(threadId);
-    const thread = ensureThread(threadId);
     console.log(`Socket ${socket.id} joined room ${threadId}`);
     socket.emit('joined_room', { threadId });
     io.emit('thread_joined', {
-      threadId: thread.id,
-      label: thread.label,
-      preview: thread.preview,
+      threadId,
+      label: getThreadLabel(threadId),
+      preview: '',
     });
   });
 
-  socket.on('send_message', (payload) => {
+  socket.on('send_message', async (payload) => {
     const { threadId, text, sender } = payload || {};
     if (!threadId || !text) {
       return;
     }
 
-    const thread = ensureThread(threadId);
     const message = {
       threadId,
       sender: sender || 'unknown',
@@ -130,11 +232,19 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString(),
     };
 
-    thread.messages.push(message);
-    thread.preview = text;
-    saveThreads();
+    try {
+      await saveMessage(message);
+    } catch (error) {
+      console.error('Failed to save message:', error);
+      return;
+    }
 
-    io.emit('receive_message', message);
+    io.to(threadId).emit('receive_message', message);
+    io.emit('thread_joined', {
+      threadId,
+      label: getThreadLabel(threadId),
+      preview: text,
+    });
     console.log(`Message in ${threadId} from ${sender || 'unknown'}: ${text}`);
   });
 
@@ -143,7 +253,16 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3000;
-server.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+const PORT = process.env.PORT || 3000;
+
+async function start() {
+  await connectDb();
+  server.listen(PORT, () => {
+    console.log(`Server listening on port ${PORT}`);
+  });
+}
+
+start().catch((error) => {
+  console.error('Server failed to start:', error);
+  process.exit(1);
 });

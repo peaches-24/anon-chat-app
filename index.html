@@ -202,6 +202,30 @@
       display: none;
     }
 
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      background: rgba(0, 0, 0, 0.85);
+      color: white;
+      padding: 14px 18px;
+      border-radius: 18px;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.18);
+      font-size: 0.95rem;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s ease, transform 0.25s ease;
+      z-index: 20;
+      max-width: calc(100% - 32px);
+      text-align: center;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(-8px);
+    }
+
     @media (max-width: 420px) {
       header {
         padding: 18px 16px 14px;
@@ -255,6 +279,7 @@
     </form>
 
     <div class="notification-banner" id="notificationBanner">Browser notifications are enabled. If you don't see a prompt, allow notifications in your browser settings.</div>
+    <div class="toast" id="toast"></div>
     <div style="text-align:center; padding: 10px 16px;">
       <button id="notifyButton" type="button" style="padding: 10px 16px; border-radius: 999px; border: 1px solid #128c7e; background: white; color: #128c7e; cursor: pointer; font-weight: 700;">Enable notifications</button>
     </div>
@@ -308,10 +333,15 @@
     socket.on('receive_message', (message) => {
       if (!message || message.threadId !== threadId) return;
       if (message.sender === 'user') {
-        appendMessage(message.text, 'sent');
+        appendMessage(message.text, 'sent', message.timestamp);
+        showToast('Message sent');
+        if (Notification.permission === 'granted') {
+          showNotification('Message sent', message.text);
+        }
       } else {
-        appendMessage(message.text, 'received');
-        if (document.hidden) {
+        appendMessage(message.text, 'received', message.timestamp);
+        showToast('Admin replied');
+        if (Notification.permission === 'granted') {
           showNotification('Admin replied', message.text);
         }
       }
@@ -372,12 +402,97 @@
       }
     }
 
-    function appendMessage(text, type = 'received') {
+    function showToast(message) {
+      const toast = document.getElementById('toast');
+      if (!toast) return;
+      toast.textContent = message;
+      toast.classList.add('show');
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => {
+        toast.classList.remove('show');
+      }, 3200);
+    }
+
+    function appendMessage(text, type = 'received', timestamp = new Date().toISOString()) {
       const bubble = document.createElement('div');
       bubble.className = `message ${type}`;
-      bubble.innerHTML = `<span>${text}</span><small>${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>`;
+      bubble.innerHTML = `<span>${text}</span><small>${new Date(timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</small>`;
       messagesEl.appendChild(bubble);
       messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+
+    async function loadThreadHistory() {
+      try {
+        const response = await fetch(`/threads/${threadId}/messages`);
+        if (!response.ok) {
+          throw new Error('Failed to load history');
+        }
+        const history = await response.json();
+        history.forEach((message) => {
+          const type = message.sender === 'user' ? 'sent' : 'received';
+          appendMessage(message.text, type, message.timestamp);
+        });
+      } catch (error) {
+        console.warn('Unable to load message history:', error);
+      }
+    }
+
+    // --- Service Worker & Push subscription ---
+    async function registerServiceWorkerAndSubscribe() {
+      if (!('serviceWorker' in navigator) || !('PushManager' in window)) return null;
+      try {
+        const reg = await navigator.serviceWorker.register('/sw.js', { scope: '/' });
+        const existing = await reg.pushManager.getSubscription();
+        if (existing) {
+          return existing;
+        }
+
+        const pubRes = await fetch('/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+        const pubJson = await pubRes.json();
+        const vapidPublicKey = pubJson.publicKey;
+        if (!vapidPublicKey) return null;
+
+        const convertedKey = urlBase64ToUint8Array(vapidPublicKey);
+        const subscription = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedKey,
+        });
+
+        await fetch('/subscribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(subscription),
+        });
+        return subscription;
+      } catch (error) {
+        console.warn('Service worker registration failed', error);
+        return null;
+      }
+    }
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+      const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+      const rawData = atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    // Listen for messages from service worker
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', (event) => {
+        if (event.data && event.data.type === 'open-thread' && event.data.threadId) {
+          // already in this client, no navigation implemented
+          console.log('Open thread from notification', event.data.threadId);
+        }
+      });
     }
 
     function sendMessage(text) {
@@ -400,14 +515,16 @@
       sendButton.disabled = !inputEl.value.trim();
     });
 
-    window.addEventListener('DOMContentLoaded', () => {
-      appendMessage('Welcome! Start typing to chat anonymously.');
+    window.addEventListener('DOMContentLoaded', async () => {
+      appendMessage('Welcome! Start typing to chat anonymously.', 'system');
       sendButton.disabled = true;
       requestNotificationPermission();
       updateNotificationBanner();
       if (notifyButton) {
         notifyButton.addEventListener('click', enableNotifications);
       }
+      await loadThreadHistory();
+      await registerServiceWorkerAndSubscribe();
     });
   </script>
 </body>
